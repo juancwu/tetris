@@ -105,6 +105,11 @@ int view() {
 
     // clear the screen
     printf(CLEAR_SCREEN_AND_HIDE_CURSOR);
+    // print game title
+    for (int s = 0; s < center_x; s++) {
+        printf(" ");
+    }
+    printf("Tetris!\n");
     // print the grid
     for (int y = 0; y < HEIGHT + 2; y++) {
         for (int s = 0; s < center_x; s++) {
@@ -139,13 +144,6 @@ int main() {
         view();
         usleep(500 * 1000);
     }
-
-    // for (int y = 0; y < HEIGHT + 2; y++) {
-    //     for (int x = 0; x < WIDTH * 2 + 2; x++) {
-    //         printf("%c", rendered_grid[y][x]);
-    //     }
-    //     printf("\n");
-    // }
 
     printf(SHOW_CURSOR);
 
