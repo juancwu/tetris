@@ -75,7 +75,25 @@ int init() {
 
 // Update the virtual grid according to various states.
 int update() {
-    // for now we just move down
+    // read movements
+    char movement;
+    scanf(" %c", &movement);
+    switch (movement) {
+    case 'h':
+        current_x -= 1;
+        if (current_x < 0)
+            current_x = 0;
+        break;
+    case 'l':
+        current_x += 1;
+        if (current_x >= WIDTH) {
+            current_x = WIDTH - 1;
+        }
+        break;
+    default:
+        break;
+    }
+
     current_y++;
     if (current_y >= HEIGHT) {
         current_y = 0;
