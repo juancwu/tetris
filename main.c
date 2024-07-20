@@ -1,8 +1,11 @@
 #include <ncurses.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/ioctl.h>
+#include <termios.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -27,13 +30,7 @@ char rendered_grid[HEIGHT + 2][WIDTH * 2 + 2];
 struct winsize window;
 int center_y, center_x;
 
-// Keep tracks when we last render to the terminal. This allows the program to
-// keep reading from stdin without being blocked by usleep().
-clock_t last_render_time;
-// Keep tracks of the time of the current update time.
-clock_t current_update_time;
-// stores the elapsed time between last render and current update.
-double elapsed_time;
+int can_update;
 
 // This represents the different tetromino available.
 enum Tetromino {
@@ -60,11 +57,59 @@ enum Tetromino current_shape;
 enum Orientation current_shape_orientation;
 int current_y, current_x;
 
+volatile sig_atomic_t stop_reading = 0;
+struct termios original_tio;
+
+// Function to restore the terminal to its original settings
+void restore_terminal_settings() {
+    tcsetattr(STDIN_FILENO, TCSANOW, &original_tio);
+}
+
+// Function to set the terminal to non-canonical mode
+void set_non_canonical_mode() {
+    struct termios tio;
+    tcgetattr(STDIN_FILENO, &tio);
+    original_tio = tio;
+    atexit(restore_terminal_settings);
+
+    tio.c_lflag &= ~(ICANON | ECHO); // Disable canonical mode and echo
+    tio.c_cc[VMIN] = 1;              // Minimum number of characters to read
+    tio.c_cc[VTIME] = 0;             // Timeout for read
+    tcsetattr(STDIN_FILENO, TCSANOW, &tio);
+}
+
+void *read_from_stdin(void *arg) {
+    char ch;
+    while (!stop_reading) {
+        if (read(STDIN_FILENO, &ch, 1) > 0 && can_update) {
+            // read movements
+            switch (ch) {
+            case 'h':
+                current_x -= 1;
+                if (current_x < 0)
+                    current_x = 0;
+                break;
+            case 'l':
+                current_x += 1;
+                if (current_x >= WIDTH) {
+                    current_x = WIDTH - 1;
+                }
+                break;
+            case 'q':
+                stop_reading = 1;
+                break;
+            default:
+                break;
+            }
+        }
+        usleep(100000);
+    }
+    return NULL;
+}
+
 // Initialize the game, includes playfield and picks the starting tetromino.
 int init() {
-    initscr();
-    cbreak();
-    noecho();
+    set_non_canonical_mode();
     for (int y = 0; y < HEIGHT; y++) {
         for (int x = 0; x < WIDTH; x++) {
             virtual_grid[y][x] = 0;
@@ -86,34 +131,10 @@ int init() {
 }
 
 // cleans up after the game
-void clean_up() {
-    endwin();
-    printf(SHOW_CURSOR);
-}
+void clean_up() { printf(SHOW_CURSOR); }
 
 // Update the virtual grid according to various states.
 int update() {
-    // read movements
-    int movement;
-    movement = getch();
-    if (movement != ERR) {
-        switch (movement) {
-        case 'h':
-            current_x -= 1;
-            if (current_x < 0)
-                current_x = 0;
-            break;
-        case 'l':
-            current_x += 1;
-            if (current_x >= WIDTH) {
-                current_x = WIDTH - 1;
-            }
-            break;
-        default:
-            break;
-        }
-    }
-
     current_y++;
     if (current_y >= HEIGHT) {
         current_y = 0;
@@ -168,10 +189,11 @@ int view() {
 void handle_sigint(int sig) {
     printf("Caught signal %d (SIGINT).", sig);
     clean_up();
-    exit(0);
+    exit(1);
 }
 
 int main() {
+    pthread_t thread_id;
     signal(SIGINT, handle_sigint);
 
     // struct winsize w;
@@ -185,14 +207,22 @@ int main() {
     center_x = window.ws_col / 2 - WIDTH - 1;
 
     init();
-    while (1) {
-        current_update_time = clock();
-        elapsed_time = (double)(current_update_time - last_render_time) *
-                       1000.0 / CLOCKS_PER_SEC;
+
+    if (pthread_create(&thread_id, NULL, read_from_stdin, NULL) != 0) {
+        perror("pthread_create");
+        clean_up();
+        return 1;
+    }
+
+    while (!stop_reading) {
+        can_update = 1;
         update();
         view();
-        // usleep(500 * 1000);
+        can_update = 0;
+        usleep(500 * 1000);
     }
+
+    pthread_join(thread_id, NULL);
 
     clean_up();
 
