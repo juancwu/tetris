@@ -1,5 +1,7 @@
 #include <ncurses.h>
+#include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/ioctl.h>
 #include <time.h>
 #include <unistd.h>
@@ -83,6 +85,12 @@ int init() {
     return 0;
 }
 
+// cleans up after the game
+void clean_up() {
+    endwin();
+    printf(SHOW_CURSOR);
+}
+
 // Update the virtual grid according to various states.
 int update() {
     // read movements
@@ -157,7 +165,15 @@ int view() {
     return 0;
 }
 
+void handle_sigint(int sig) {
+    printf("Caught signal %d (SIGINT).", sig);
+    clean_up();
+    exit(0);
+}
+
 int main() {
+    signal(SIGINT, handle_sigint);
+
     // struct winsize w;
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &window) == -1) {
         perror("ioctl");
@@ -178,7 +194,7 @@ int main() {
         // usleep(500 * 1000);
     }
 
-    printf(SHOW_CURSOR);
+    clean_up();
 
     return 0;
 }
