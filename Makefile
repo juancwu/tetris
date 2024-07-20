@@ -1,2 +1,2 @@
 build:
-	clang -o tetris main.c -lncurses
+	clang -o bin/tetris main.c -lncurses
