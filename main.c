@@ -1,7 +1,7 @@
-// #include <stdio.h>
+#include <ncurses.h>
 #include <stdio.h>
-// #include <stdlib.h>
 #include <sys/ioctl.h>
+#include <time.h>
 #include <unistd.h>
 
 #define HEIGHT 16
@@ -24,6 +24,14 @@ char rendered_grid[HEIGHT + 2][WIDTH * 2 + 2];
 
 struct winsize window;
 int center_y, center_x;
+
+// Keep tracks when we last render to the terminal. This allows the program to
+// keep reading from stdin without being blocked by usleep().
+clock_t last_render_time;
+// Keep tracks of the time of the current update time.
+clock_t current_update_time;
+// stores the elapsed time between last render and current update.
+double elapsed_time;
 
 // This represents the different tetromino available.
 enum Tetromino {
@@ -52,6 +60,9 @@ int current_y, current_x;
 
 // Initialize the game, includes playfield and picks the starting tetromino.
 int init() {
+    initscr();
+    cbreak();
+    noecho();
     for (int y = 0; y < HEIGHT; y++) {
         for (int x = 0; x < WIDTH; x++) {
             virtual_grid[y][x] = 0;
@@ -75,22 +86,24 @@ int init() {
 // Update the virtual grid according to various states.
 int update() {
     // read movements
-    char movement;
-    scanf(" %c", &movement);
-    switch (movement) {
-    case 'h':
-        current_x -= 1;
-        if (current_x < 0)
-            current_x = 0;
-        break;
-    case 'l':
-        current_x += 1;
-        if (current_x >= WIDTH) {
-            current_x = WIDTH - 1;
+    int movement;
+    movement = getch();
+    if (movement != ERR) {
+        switch (movement) {
+        case 'h':
+            current_x -= 1;
+            if (current_x < 0)
+                current_x = 0;
+            break;
+        case 'l':
+            current_x += 1;
+            if (current_x >= WIDTH) {
+                current_x = WIDTH - 1;
+            }
+            break;
+        default:
+            break;
         }
-        break;
-    default:
-        break;
     }
 
     current_y++;
@@ -157,9 +170,12 @@ int main() {
 
     init();
     while (1) {
+        current_update_time = clock();
+        elapsed_time = (double)(current_update_time - last_render_time) *
+                       1000.0 / CLOCKS_PER_SEC;
         update();
         view();
-        usleep(500 * 1000);
+        // usleep(500 * 1000);
     }
 
     printf(SHOW_CURSOR);
