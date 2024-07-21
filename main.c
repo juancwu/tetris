@@ -21,16 +21,8 @@
 
 // A virtual grid to represent the state of the playfield.
 // This makes it easier to do collision detection, rotation and movement.
-// Then when everything has been checked, the virtual grid is rendered.
+// Then when everything has been checked, the grid can be printed.
 int virtual_grid[HEIGHT][WIDTH], snap_virtual_grid[HEIGHT][WIDTH];
-
-// A rendered grid contains the visual representation of the virtual grid.
-// It has 2 more height and width than the virtual grid because it renders
-// borders as well. However, the borders are not included into the virtual grid
-// because we do not need it for evaluation.
-//
-// width * 2 is to compensate the size of a block drawn with [].
-char rendered_grid[HEIGHT + 2][WIDTH * 2 + 2];
 
 // Window stats
 struct winsize window;
@@ -62,7 +54,7 @@ enum Orientation {
 // Current shape properties
 enum Tetromino current_shape;
 enum Orientation current_shape_orientation;
-int current_y, current_x;
+int top_left_y, top_left_x, bottom_right_y, bottom_right_x;
 
 volatile sig_atomic_t stop_reading = 0;
 struct termios original_tio;
@@ -118,46 +110,46 @@ void copy_grid() {
 void set_tetromino_in_grid_as(int i) {
     switch (current_shape) {
     case I:
-        snap_virtual_grid[current_y][current_x] = i;
-        snap_virtual_grid[current_y][current_x + 1] = i;
-        snap_virtual_grid[current_y][current_x + 2] = i;
-        snap_virtual_grid[current_y][current_x + 3] = i;
+        snap_virtual_grid[top_left_y][top_left_x] = i;
+        snap_virtual_grid[top_left_y][top_left_x + 1] = i;
+        snap_virtual_grid[top_left_y][top_left_x + 2] = i;
+        snap_virtual_grid[top_left_y][top_left_x + 3] = i;
         break;
     case T:
-        snap_virtual_grid[current_y][current_x] = i;
-        snap_virtual_grid[current_y][current_x + 1] = i;
-        snap_virtual_grid[current_y][current_x + 2] = i;
-        snap_virtual_grid[current_y + 1][current_x + 1] = i;
+        snap_virtual_grid[top_left_y][top_left_x] = i;
+        snap_virtual_grid[top_left_y][top_left_x + 1] = i;
+        snap_virtual_grid[top_left_y][top_left_x + 2] = i;
+        snap_virtual_grid[top_left_y + 1][top_left_x + 1] = i;
         break;
     case O:
-        snap_virtual_grid[current_y][current_x] = i;
-        snap_virtual_grid[current_y][current_x + 1] = i;
-        snap_virtual_grid[current_y + 1][current_x] = i;
-        snap_virtual_grid[current_y + 1][current_x + 1] = i;
+        snap_virtual_grid[top_left_y][top_left_x] = i;
+        snap_virtual_grid[top_left_y][top_left_x + 1] = i;
+        snap_virtual_grid[top_left_y + 1][top_left_x] = i;
+        snap_virtual_grid[top_left_y + 1][top_left_x + 1] = i;
         break;
     case S:
-        snap_virtual_grid[current_y][current_x + 1] = i;
-        snap_virtual_grid[current_y][current_x + 2] = i;
-        snap_virtual_grid[current_y + 1][current_x + 1] = i;
-        snap_virtual_grid[current_y + 1][current_x] = i;
+        snap_virtual_grid[top_left_y][top_left_x + 1] = i;
+        snap_virtual_grid[top_left_y][top_left_x + 2] = i;
+        snap_virtual_grid[top_left_y + 1][top_left_x + 1] = i;
+        snap_virtual_grid[top_left_y + 1][top_left_x] = i;
         break;
     case Z:
-        snap_virtual_grid[current_y][current_x] = i;
-        snap_virtual_grid[current_y][current_x + 1] = i;
-        snap_virtual_grid[current_y + 1][current_x + 1] = i;
-        snap_virtual_grid[current_y + 1][current_x + 2] = i;
+        snap_virtual_grid[top_left_y][top_left_x] = i;
+        snap_virtual_grid[top_left_y][top_left_x + 1] = i;
+        snap_virtual_grid[top_left_y + 1][top_left_x + 1] = i;
+        snap_virtual_grid[top_left_y + 1][top_left_x + 2] = i;
         break;
     case L:
-        snap_virtual_grid[current_y][current_x + 2] = i;
-        snap_virtual_grid[current_y + 1][current_x] = i;
-        snap_virtual_grid[current_y + 1][current_x + 1] = i;
-        snap_virtual_grid[current_y + 1][current_x + 2] = i;
+        snap_virtual_grid[top_left_y][top_left_x + 2] = i;
+        snap_virtual_grid[top_left_y + 1][top_left_x] = i;
+        snap_virtual_grid[top_left_y + 1][top_left_x + 1] = i;
+        snap_virtual_grid[top_left_y + 1][top_left_x + 2] = i;
         break;
     case J:
-        snap_virtual_grid[current_y][current_x] = i;
-        snap_virtual_grid[current_y + 1][current_x] = i;
-        snap_virtual_grid[current_y + 1][current_x + 1] = i;
-        snap_virtual_grid[current_y + 1][current_x + 2] = i;
+        snap_virtual_grid[top_left_y][top_left_x] = i;
+        snap_virtual_grid[top_left_y + 1][top_left_x] = i;
+        snap_virtual_grid[top_left_y + 1][top_left_x + 1] = i;
+        snap_virtual_grid[top_left_y + 1][top_left_x + 2] = i;
         break;
     default:
         break;
@@ -194,14 +186,14 @@ void *read_from_stdin(void *arg) {
                     // read movements
                     switch (ch) {
                     case 'h':
-                        current_x -= 1;
-                        if (current_x < 0)
-                            current_x = 0;
+                        top_left_x -= 1;
+                        if (top_left_x < 0)
+                            top_left_x = 0;
                         break;
                     case 'l':
-                        current_x += 1;
-                        if (current_x >= WIDTH) {
-                            current_x = WIDTH - 1;
+                        top_left_x += 1;
+                        if (top_left_x >= WIDTH) {
+                            top_left_x = WIDTH - 1;
                         }
                         break;
                     default:
@@ -223,11 +215,12 @@ enum Tetromino pick_tetromino() {
 
 // Initialize the game, includes playfield and picks the starting tetromino.
 int init() {
+    // set the random seed
     srand(time(0));
     set_non_canonical_mode();
     current_shape = pick_tetromino();
-    current_x = WIDTH / 2;
-    current_y = 0;
+    top_left_x = WIDTH / 2;
+    top_left_y = 0;
     for (int y = 0; y < HEIGHT; y++) {
         for (int x = 0; x < WIDTH; x++) {
             virtual_grid[y][x] = 0;
@@ -235,18 +228,9 @@ int init() {
     }
     set_tetromino_in_grid_as(1);
     take_virtual_grid_snapshot();
-    for (int y = 0; y < HEIGHT + 2; y++) {
-        for (int x = 0; x < WIDTH * 2 + 2; x++) {
-            if (y == 0 || y == HEIGHT + 1) {
-                rendered_grid[y][x] = '-';
-            } else if (x == 0 || x == WIDTH * 2 + 1) {
-                rendered_grid[y][x] = ':';
-            } else {
-                rendered_grid[y][x] = ' ';
-            }
-        }
-    }
-    current_y = -1;
+    // setting this to -1 because the first call to update increments the top
+    // left y point by 1
+    top_left_y = -1;
     return 0;
 }
 
@@ -270,10 +254,10 @@ int update(long current_time) {
     }
     if (can_update_gravity(current_time)) {
         last_gravity_update_time = current_time;
-        current_y++;
+        top_left_y++;
         // TODO: remove this once we have collision
-        if (current_y >= HEIGHT) {
-            current_y = 0;
+        if (top_left_y >= HEIGHT) {
+            top_left_y = 0;
         }
     }
     if (can_update_virtual_grid(current_time)) {
@@ -283,42 +267,68 @@ int update(long current_time) {
     return 0;
 }
 
+// This will allocate a new array of empty spaces of size n.
+char *get_spaces(int n) {
+    char *spaces = (char *)malloc(n * sizeof(char));
+    if (spaces == NULL) {
+        return NULL;
+    }
+    for (int i = 0; i < n; i++) {
+        spaces[i] = ' ';
+    }
+    return spaces;
+}
+
 // Renders the virtual grid.
 int view(long current_time) {
     if (last_view_update_time == 0 ||
         current_time - last_view_update_time >= MS_100) {
+        // update the view update time
         last_view_update_time = current_time;
-        // render the grid
-        // we don't have to touch the borders
-        for (int y = 0; y < HEIGHT; y++) {
-            for (int x = 0; x < WIDTH; x++) {
-                if (virtual_grid[y][x] == 1) {
-                    rendered_grid[y + 1][x * 2 + 1] = '[';
-                    rendered_grid[y + 1][x * 2 + 2] = ']';
-                } else {
-                    rendered_grid[y + 1][x * 2 + 1] = ' ';
-                    rendered_grid[y + 1][x * 2 + 2] = ' ';
-                }
-            }
-        }
+
+        // get spaces to center the view
+        char *spaces = get_spaces(window_center_x);
 
         // clear the screen
         printf(CLEAR_SCREEN_AND_HIDE_CURSOR);
+
         // print game title and score
-        for (int s = 0; s < window_center_x; s++) {
-            printf(" ");
+        printf("%sTetris! Score: %7d\n", spaces, score);
+
+        // calculate the real rendered width of the grid
+        // Multiply by 2 because each 1 or block of the tetromino
+        // is two characters long and plus 2 to make up for the left/right
+        // borders.
+        int real_rendered_width = WIDTH * 2 + 2;
+
+        // print the top border
+        printf("%s", spaces);
+        for (int s = 0; s < real_rendered_width; s++) {
+            printf("-");
         }
-        printf("Tetris! Score: %7d\n", score);
+        printf("\n");
+
         // print the grid
-        for (int y = 0; y < HEIGHT + 2; y++) {
-            for (int s = 0; s < window_center_x; s++) {
-                printf(" ");
+        for (int y = 0; y < HEIGHT; y++) {
+            printf("%s", spaces);
+            printf(":");
+            for (int x = 0; x < WIDTH; x++) {
+                if (virtual_grid[y][x] == 1) {
+                    printf("[]");
+                } else {
+                    printf("  ");
+                }
             }
-            for (int x = 0; x < WIDTH * 2 + 2; x++) {
-                printf("%c", rendered_grid[y][x]);
-            }
-            printf("\n");
+            printf(":\n");
         }
+
+        // print the bottom border
+        printf("%s", spaces);
+        for (int s = 0; s < real_rendered_width; s++) {
+            printf("-");
+        }
+        printf("\n");
+
         for (int s = 0; s < window_center_y - 1; s++) {
             printf("\n");
         }
