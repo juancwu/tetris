@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/time.h>
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
@@ -13,6 +14,8 @@
 #define WIDTH 10
 #define CLEAR_SCREEN_AND_HIDE_CURSOR "\033[2J\033[?25l"
 #define SHOW_CURSOR "\033[?25h"
+#define ONE_SECOND_IN_MS 1000000
+#define INPUT_DELAY_IN_MS 500000 // Delay in microseconds (500 ms)
 
 // A virtual grid to represent the state of the playfield.
 // This makes it easier to do collision detection, rotation and movement.
@@ -29,8 +32,6 @@ char rendered_grid[HEIGHT + 2][WIDTH * 2 + 2];
 
 struct winsize window;
 int center_y, center_x;
-
-int can_update;
 
 // This represents the different tetromino available.
 enum Tetromino {
@@ -78,31 +79,47 @@ void set_non_canonical_mode() {
     tcsetattr(STDIN_FILENO, TCSANOW, &tio);
 }
 
+// Gets the current time in miliseconds. The function uses the system time to
+// calculate the current time.
+long get_current_time() {
+    struct timeval current_time;
+    gettimeofday(&current_time, NULL);
+    return (current_time.tv_sec * ONE_SECOND_IN_MS + current_time.tv_usec);
+}
+
+// This is a thread function that is responsible of handling reading inputs from
+// stdin.
 void *read_from_stdin(void *arg) {
     char ch;
+    long last_input_time = 0, current_input_time;
     while (!stop_reading) {
-        if (read(STDIN_FILENO, &ch, 1) > 0 && can_update) {
-            // read movements
-            switch (ch) {
-            case 'h':
-                current_x -= 1;
-                if (current_x < 0)
-                    current_x = 0;
-                break;
-            case 'l':
-                current_x += 1;
-                if (current_x >= WIDTH) {
-                    current_x = WIDTH - 1;
-                }
-                break;
-            case 'q':
+        if (read(STDIN_FILENO, &ch, 1) > 0) {
+            if (ch == 'q') {
                 stop_reading = 1;
-                break;
-            default:
-                break;
+            } else {
+                current_input_time = get_current_time();
+                if (last_input_time == 0 ||
+                    current_input_time - last_input_time >= INPUT_DELAY_IN_MS) {
+                    last_input_time = current_input_time;
+                    // read movements
+                    switch (ch) {
+                    case 'h':
+                        current_x -= 1;
+                        if (current_x < 0)
+                            current_x = 0;
+                        break;
+                    case 'l':
+                        current_x += 1;
+                        if (current_x >= WIDTH) {
+                            current_x = WIDTH - 1;
+                        }
+                        break;
+                    default:
+                        break;
+                    }
+                }
             }
         }
-        usleep(100000);
     }
     return NULL;
 }
@@ -215,10 +232,8 @@ int main() {
     }
 
     while (!stop_reading) {
-        can_update = 1;
         update();
         view();
-        can_update = 0;
         usleep(500 * 1000);
     }
 
