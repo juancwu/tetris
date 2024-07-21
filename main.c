@@ -41,7 +41,7 @@ typedef struct {
     int snap_virtual_grid[HEIGHT][WIDTH];
 
     // Current tetromino being manipulated
-    Point points[TETROMINO_BLOCK_SIZE];
+    Point *points;
 
     // Window stat, the center point on the Y-axis.
     int window_center_y;
@@ -342,9 +342,16 @@ void init(GameState *game_state) {
 
     // set the random seed
     srand(time(0));
+
     set_non_canonical_mode();
+
+    // init the points array
+    game_state->points = (Point *)malloc(TETROMINO_BLOCK_SIZE * sizeof(Point));
     pick_tetromino(game_state);
+
+    game_state->virtual_grid = (int **)malloc(HEIGHT * sizeof(int *));
     for (int y = 0; y < HEIGHT; y++) {
+        game_state->virtual_grid[y] = (int *)malloc(WIDTH * sizeof(int));
         for (int x = 0; x < WIDTH; x++) {
             game_state->virtual_grid[y][x] = 0;
         }
@@ -354,7 +361,15 @@ void init(GameState *game_state) {
 }
 
 // cleans up after the game
-void clean_up() { printf(SHOW_CURSOR); }
+void clean_up(GameState *game_state) {
+    for (int y = 0; y < HEIGHT; y++) {
+        free(game_state->virtual_grid[y]);
+    }
+    free(game_state->virtual_grid);
+    free(game_state->points);
+
+    printf(SHOW_CURSOR);
+}
 
 // Checks if 100ms has passed since the last update.
 int can_update_virtual_grid(long now, long last) {
@@ -370,7 +385,8 @@ int can_update_gravity(long now, long last) {
 int detect_collision_bottom(GameState *game_state) {
     for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
         int peek_y = game_state->points[i].y + 1;
-        if (game_state->virtual_grid[peek_y][game_state->points[i].x] == 1) {
+        if (peek_y >= HEIGHT ||
+            game_state->virtual_grid[peek_y][game_state->points[i].x] == 1) {
             return 1;
         }
     }
@@ -479,8 +495,7 @@ int view(GameState *game_state) {
 
 void handle_sigint(int sig) {
     printf("Caught signal %d (SIGINT).", sig);
-    clean_up();
-    exit(1);
+    stop_reading = 1;
 }
 
 void debug_points(Point points[TETROMINO_BLOCK_SIZE]) {
@@ -512,7 +527,7 @@ int main() {
 
     if (pthread_create(&thread_id, NULL, read_from_stdin, &game_state) != 0) {
         perror("pthread_create");
-        clean_up();
+        clean_up(&game_state);
         return 1;
     }
 
@@ -530,7 +545,7 @@ int main() {
 
     pthread_join(thread_id, NULL);
 
-    clean_up();
+    clean_up(&game_state);
 
     return 0;
 }
