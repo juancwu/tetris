@@ -15,7 +15,8 @@
 #define CLEAR_SCREEN_AND_HIDE_CURSOR "\033[2J\033[?25l"
 #define SHOW_CURSOR "\033[?25h"
 #define ONE_SECOND_IN_MS 1000000
-#define INPUT_DELAY_IN_MS 500000 // Delay in microseconds (500 ms)
+#define MS_100 100000 // Delay in microseconds (100 ms)
+#define MS_600 600000 // Delay in microseconds (600 ms)
 
 // A virtual grid to represent the state of the playfield.
 // This makes it easier to do collision detection, rotation and movement.
@@ -64,6 +65,8 @@ int current_y, current_x;
 volatile sig_atomic_t stop_reading = 0;
 struct termios original_tio;
 
+long last_gravity_update_time, last_view_update_time;
+
 // Function to restore the terminal to its original settings
 void restore_terminal_settings() {
     tcsetattr(STDIN_FILENO, TCSANOW, &original_tio);
@@ -102,7 +105,7 @@ void *read_from_stdin(void *arg) {
             } else {
                 current_input_time = get_current_time();
                 if (last_input_time == 0 ||
-                    current_input_time - last_input_time >= INPUT_DELAY_IN_MS) {
+                    current_input_time - last_input_time >= MS_100) {
                     last_input_time = current_input_time;
                     // read movements
                     switch (ch) {
@@ -154,55 +157,63 @@ int init() {
 void clean_up() { printf(SHOW_CURSOR); }
 
 // Update the virtual grid according to various states.
-int update() {
-    current_y++;
-    if (current_y >= HEIGHT) {
-        current_y = 0;
+int update(long current_time) {
+    if (last_gravity_update_time == 0 ||
+        current_time - last_gravity_update_time >= MS_600) {
+        last_gravity_update_time = current_time;
+        current_y++;
+        // TODO: remove this once we have collision
+        if (current_y >= HEIGHT) {
+            current_y = 0;
+        }
     }
     return 0;
 }
 
 // Renders the virtual grid.
-int view() {
-    // render the grid
-    // we don't have to touch the borders
-    for (int y = 0; y < HEIGHT; y++) {
-        for (int x = 0; x < WIDTH; x++) {
-            if (virtual_grid[y][x] == 1) {
-                rendered_grid[y + 1][x * 2 + 1] = '[';
-                rendered_grid[y + 1][x * 2 + 2] = ']';
-            } else {
-                rendered_grid[y + 1][x * 2 + 1] = ' ';
-                rendered_grid[y + 1][x * 2 + 2] = ' ';
+int view(long current_time) {
+    if (last_view_update_time == 0 ||
+        current_time - last_view_update_time >= MS_100) {
+        last_view_update_time = current_time;
+        // render the grid
+        // we don't have to touch the borders
+        for (int y = 0; y < HEIGHT; y++) {
+            for (int x = 0; x < WIDTH; x++) {
+                if (virtual_grid[y][x] == 1) {
+                    rendered_grid[y + 1][x * 2 + 1] = '[';
+                    rendered_grid[y + 1][x * 2 + 2] = ']';
+                } else {
+                    rendered_grid[y + 1][x * 2 + 1] = ' ';
+                    rendered_grid[y + 1][x * 2 + 2] = ' ';
+                }
             }
         }
-    }
 
-    // just drawing a single block for simplicity
-    rendered_grid[current_y + 1][current_x * 2 + 1] = '[';
-    rendered_grid[current_y + 1][current_x * 2 + 2] = ']';
+        // just drawing a single block for simplicity
+        rendered_grid[current_y + 1][current_x * 2 + 1] = '[';
+        rendered_grid[current_y + 1][current_x * 2 + 2] = ']';
 
-    // clear the screen
-    printf(CLEAR_SCREEN_AND_HIDE_CURSOR);
-    // print game title and score
-    for (int s = 0; s < center_x; s++) {
-        printf(" ");
-    }
-    printf("Tetris! Score: %7d\n", score);
-    // print the grid
-    for (int y = 0; y < HEIGHT + 2; y++) {
+        // clear the screen
+        printf(CLEAR_SCREEN_AND_HIDE_CURSOR);
+        // print game title and score
         for (int s = 0; s < center_x; s++) {
             printf(" ");
         }
-        for (int x = 0; x < WIDTH * 2 + 2; x++) {
-            printf("%c", rendered_grid[y][x]);
+        printf("Tetris! Score: %7d\n", score);
+        // print the grid
+        for (int y = 0; y < HEIGHT + 2; y++) {
+            for (int s = 0; s < center_x; s++) {
+                printf(" ");
+            }
+            for (int x = 0; x < WIDTH * 2 + 2; x++) {
+                printf("%c", rendered_grid[y][x]);
+            }
+            printf("\n");
         }
-        printf("\n");
+        for (int s = 0; s < center_y - 1; s++) {
+            printf("\n");
+        }
     }
-    for (int s = 0; s < center_y - 1; s++) {
-        printf("\n");
-    }
-
     return 0;
 }
 
@@ -234,10 +245,11 @@ int main() {
         return 1;
     }
 
+    long current_time;
     while (!stop_reading) {
-        update();
-        view();
-        usleep(500 * 1000);
+        current_time = get_current_time();
+        update(current_time);
+        view(current_time);
     }
 
     pthread_join(thread_id, NULL);
