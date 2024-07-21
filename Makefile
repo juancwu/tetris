@@ -1,4 +1,12 @@
+CC := clang
+
+ifneq ($(CC),)
+	CC := $(CC)
+endif
+
 build:
-	clang -o bin/tetris main.c -lncurses
+	@$(CC) -o bin/tetris main.c
 run:
-	./bin/tetris
+	@./bin/tetris
+clean:
+	rm -f ./bin/tetris
