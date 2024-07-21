@@ -33,6 +33,9 @@ char rendered_grid[HEIGHT + 2][WIDTH * 2 + 2];
 struct winsize window;
 int center_y, center_x;
 
+// score in the game
+int score;
+
 // This represents the different tetromino available.
 enum Tetromino {
     I,
@@ -181,11 +184,11 @@ int view() {
 
     // clear the screen
     printf(CLEAR_SCREEN_AND_HIDE_CURSOR);
-    // print game title
+    // print game title and score
     for (int s = 0; s < center_x; s++) {
         printf(" ");
     }
-    printf("Tetris!\n");
+    printf("Tetris! Score: %7d\n", score);
     // print the grid
     for (int y = 0; y < HEIGHT + 2; y++) {
         for (int s = 0; s < center_x; s++) {
@@ -196,7 +199,7 @@ int view() {
         }
         printf("\n");
     }
-    for (int s = 0; s < center_y; s++) {
+    for (int s = 0; s < center_y - 1; s++) {
         printf("\n");
     }
 
