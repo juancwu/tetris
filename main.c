@@ -358,6 +358,10 @@ void init(GameState *game_state) {
     }
     place_tetromino_in_grid(game_state->virtual_grid, game_state->points);
     take_virtual_grid_snapshot(game_state);
+
+    game_state->last_view_update_time = 0;
+    game_state->last_gravity_update_time = 0;
+    game_state->last_virtual_grid_update_time = 0;
 }
 
 // cleans up after the game
@@ -372,13 +376,18 @@ void clean_up(GameState *game_state) {
 }
 
 // Checks if 100ms has passed since the last update.
-int can_update_virtual_grid(long now, long last) {
-    return last == 0 || now - last >= MS_100;
+int can_update_virtual_grid(GameState *game_state) {
+    return game_state->last_virtual_grid_update_time == 0 ||
+           game_state->current_time -
+                   game_state->last_virtual_grid_update_time >=
+               MS_100;
 }
 
 // Checks if 600ms has passed since the last update.
-int can_update_gravity(long now, long last) {
-    return last == 0 || now - last >= MS_600;
+int can_update_gravity(GameState *game_state) {
+    return game_state->last_gravity_update_time == 0 ||
+           game_state->current_time - game_state->last_gravity_update_time >=
+               MS_600;
 }
 
 // Collision detection on the bottom of the current points.
@@ -406,17 +415,14 @@ void shift_points_down(GameState *game_state) {
 
 // Update the virtual grid according to various states.
 int update(GameState *game_state) {
-    if (can_update_virtual_grid(game_state->current_time,
-                                game_state->last_virtual_grid_update_time)) {
+    if (can_update_virtual_grid(game_state)) {
         clear_tetromino_in_grid(game_state->virtual_grid, game_state->points);
     }
-    if (can_update_gravity(game_state->current_time,
-                           game_state->last_gravity_update_time)) {
+    if (can_update_gravity(game_state)) {
         game_state->last_gravity_update_time = game_state->current_time;
         shift_points_down(game_state);
     }
-    if (can_update_virtual_grid(game_state->current_time,
-                                game_state->last_gravity_update_time)) {
+    if (can_update_virtual_grid(game_state)) {
         game_state->last_virtual_grid_update_time = game_state->current_time;
         place_tetromino_in_grid(game_state->virtual_grid, game_state->points);
     }
@@ -534,13 +540,7 @@ int main() {
     while (!stop_reading) {
         game_state.current_time = get_current_time();
         update(&game_state);
-        debug_points(game_state.points);
-        printf("last gravity update: %ld\n",
-               game_state.last_gravity_update_time);
-        printf("last view update: %ld\n", game_state.last_view_update_time);
-        debug_grid(game_state.virtual_grid);
-        // view(&game_state);
-        usleep(MS_600);
+        view(&game_state);
     }
 
     printf("Please press any key to finish quitting the game.\n");
