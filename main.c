@@ -32,6 +32,7 @@ int virtual_grid[HEIGHT][WIDTH], snap_virtual_grid[HEIGHT][WIDTH];
 // width * 2 is to compensate the size of a block drawn with [].
 char rendered_grid[HEIGHT + 2][WIDTH * 2 + 2];
 
+// Window stats
 struct winsize window;
 int window_center_y, window_center_x;
 
