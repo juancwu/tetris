@@ -15,6 +15,8 @@
 #define CLEAR_SCREEN_AND_HIDE_CURSOR "\033[2J\033[?25l"
 #define SHOW_CURSOR "\033[?25h"
 #define ONE_SECOND_IN_MS 1000000
+// Delay in microseconds (50 ms)
+#define MS_50 50000
 // Delay in microseconds (100 ms)
 #define MS_100 100000
 // Delay in microseconds (150 ms)
@@ -66,8 +68,12 @@ typedef struct {
     long last_view_update_time;
 } GameState;
 
-// score in the game
-int score;
+int detect_collision_bottom(GameState *game_state);
+int detect_collision_left(GameState *game_state);
+int detect_collision_right(GameState *game_state);
+void shift_points_down(GameState *game_state);
+void shift_points_left(GameState *game_state);
+void shift_points_right(GameState *game_state);
 
 // This represents the different tetromino available.
 enum Tetromino {
@@ -130,6 +136,16 @@ void copy_grid(int src[HEIGHT][WIDTH], int dst[HEIGHT][WIDTH]) {
     }
 }
 
+// Takes a snapshot of the virtual grid
+void take_virtual_grid_snapshot(GameState *game_state) {
+    for (int y = 0; y < HEIGHT; y++) {
+        for (int x = 0; x < WIDTH; x++) {
+            game_state->snap_virtual_grid[y][x] =
+                game_state->virtual_grid[y][x];
+        }
+    }
+}
+
 // Clears the tetromino described by the points on the grid.
 void clear_tetromino_in_grid(int **grid, Point *points) {
     int x, y;
@@ -148,16 +164,6 @@ void place_tetromino_in_grid(int **grid, Point *points) {
     }
 }
 
-// Takes a snapshot of the virtual grid
-void take_virtual_grid_snapshot(GameState *game_state) {
-    for (int y = 0; y < HEIGHT; y++) {
-        for (int x = 0; x < WIDTH; x++) {
-            game_state->snap_virtual_grid[y][x] =
-                game_state->virtual_grid[y][x];
-        }
-    }
-}
-
 // This is a thread function that is responsible of handling reading inputs from
 // stdin.
 void *read_from_stdin(void *arg) {
@@ -171,19 +177,23 @@ void *read_from_stdin(void *arg) {
             } else {
                 current_input_time = get_current_time();
                 if (last_input_time == 0 ||
-                    current_input_time - last_input_time >= MS_100) {
+                    current_input_time - last_input_time >= MS_50) {
                     last_input_time = current_input_time;
-                    // TODO: should clear grid here
+                    clear_tetromino_in_grid(game_state->virtual_grid,
+                                            game_state->points);
                     // read movements
                     switch (ch) {
-                    case 'h':
+                    case 'j':
+                        shift_points_left(game_state);
                         break;
-                    case 'l':
+                    case 'k':
+                        shift_points_right(game_state);
                         break;
                     default:
                         break;
                     }
-                    // TODO: should place block here
+                    place_tetromino_in_grid(game_state->virtual_grid,
+                                            game_state->points);
                 }
             }
         }
@@ -380,7 +390,7 @@ int can_update_virtual_grid(GameState *game_state) {
     return game_state->last_virtual_grid_update_time == 0 ||
            game_state->current_time -
                    game_state->last_virtual_grid_update_time >=
-               MS_100;
+               MS_50;
 }
 
 // Checks if 600ms has passed since the last update.
@@ -402,6 +412,30 @@ int detect_collision_bottom(GameState *game_state) {
     return 0;
 }
 
+// Collision detection on the left of the current points.
+int detect_collision_left(GameState *game_state) {
+    for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
+        int peek_x = game_state->points[i].x - 1;
+        if (peek_x < 0 ||
+            game_state->virtual_grid[game_state->points[i].y][peek_x] == 1) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+// Collision detection on the right of the current points.
+int detect_collision_right(GameState *game_state) {
+    for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
+        int peek_x = game_state->points[i].x + 1;
+        if (peek_x >= WIDTH ||
+            game_state->virtual_grid[game_state->points[i].y][peek_x] == 1) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 // Shifts the current points 1 unit down if possible, otherwise it will stay the
 // same.
 void shift_points_down(GameState *game_state) {
@@ -410,6 +444,28 @@ void shift_points_down(GameState *game_state) {
     }
     for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
         game_state->points[i].y++;
+    }
+}
+
+// Shifts the current points 1 unit left if possible, otherwise it will stay the
+// same.
+void shift_points_left(GameState *game_state) {
+    if (detect_collision_left(game_state)) {
+        return;
+    }
+    for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
+        game_state->points[i].x--;
+    }
+}
+
+// Shifts the current points 1 unit right if possible, otherwise it will stay
+// the same.
+void shift_points_right(GameState *game_state) {
+    if (detect_collision_right(game_state)) {
+        return;
+    }
+    for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
+        game_state->points[i].x++;
     }
 }
 
@@ -444,8 +500,7 @@ char *get_spaces(int n) {
 // Renders the virtual grid.
 int view(GameState *game_state) {
     if (game_state->last_view_update_time == 0 ||
-        game_state->current_time - game_state->last_view_update_time >=
-            MS_100) {
+        game_state->current_time - game_state->last_view_update_time >= MS_50) {
         // update the view update time
         game_state->last_view_update_time = game_state->current_time;
 
@@ -456,7 +511,7 @@ int view(GameState *game_state) {
         // printf(CLEAR_SCREEN_AND_HIDE_CURSOR);
 
         // print game title and score
-        printf("%sTetris! Score: %7d\n", spaces, score);
+        printf("%sTetris! Score: %7d\n", spaces, game_state->score);
 
         // calculate the real rendered width of the grid
         // Multiply by 2 because each 1 or block of the tetromino
