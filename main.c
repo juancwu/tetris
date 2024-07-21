@@ -543,6 +543,8 @@ int main() {
         usleep(MS_600);
     }
 
+    printf("Please press any key to finish quitting the game.\n");
+
     pthread_join(thread_id, NULL);
 
     clean_up(&game_state);
