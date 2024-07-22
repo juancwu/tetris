@@ -548,10 +548,15 @@ int update(GameState *game_state) {
     if (can_update_virtual_grid(game_state)) {
         clear_tetromino_in_grid(game_state->virtual_grid, game_state->points);
     }
+
     if (can_update_gravity(game_state)) {
         game_state->last_gravity_update_time = game_state->current_time;
         shift_points_down(game_state);
+        if (detect_collision_bottom(game_state)) {
+            pick_tetromino(game_state);
+        }
     }
+
     if (can_update_virtual_grid(game_state)) {
         game_state->last_virtual_grid_update_time = game_state->current_time;
         place_tetromino_in_grid(game_state->virtual_grid, game_state->points);
