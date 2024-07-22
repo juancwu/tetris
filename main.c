@@ -1,6 +1,5 @@
 #include <ncurses.h>
 #include <pthread.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -76,6 +75,9 @@ typedef struct {
     // Keep track when was the last view rendered. Reduce overloading with
     // re-renders.
     long last_view_update_time;
+
+    // track if game is over or not.
+    int is_game_over;
 } GameState;
 
 int detect_collision_bottom(GameState *game_state);
@@ -86,7 +88,6 @@ void shift_points_left(GameState *game_state);
 void shift_points_right(GameState *game_state);
 void check_complete_rows(GameState *game_state);
 
-volatile sig_atomic_t stop_reading = 0;
 struct termios original_tio;
 char shape_names[7] = {'I', 'O', 'T', 'S', 'Z', 'J', 'L'};
 pthread_mutex_t mutex;
@@ -233,10 +234,10 @@ void *read_from_stdin(void *arg) {
     GameState *game_state = (GameState *)arg;
     char ch;
     long last_input_time = 0, current_input_time;
-    while (!stop_reading) {
+    while (!game_state->is_game_over) {
         if (read(STDIN_FILENO, &ch, 1) > 0) {
             if (ch == 'q') {
-                stop_reading = 1;
+                game_state->is_game_over = 1;
             } else {
                 current_input_time = get_current_time();
                 if (last_input_time == 0 ||
@@ -451,6 +452,8 @@ void init(GameState *game_state) {
     game_state->last_virtual_grid_update_time = 0;
 
     game_state->score = 0;
+
+    game_state->is_game_over = 0;
 }
 
 // cleans up after the game
@@ -477,6 +480,17 @@ int can_update_gravity(GameState *game_state) {
     return game_state->last_gravity_update_time == 0 ||
            game_state->current_time - game_state->last_gravity_update_time >=
                MS_500;
+}
+
+// Check if game is over or not, this should only be called when a bottom
+// collision happens.
+int is_game_over(GameState *game_state) {
+    for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
+        if (game_state->points[i].y - 1 < 0) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 // Collision detection on the bottom of the current points.
@@ -593,6 +607,8 @@ void clear_full_rows(GameState *game_state) {
             }
             // move back one row because all rows have been shifted down
             y--;
+            // give some points
+            game_state->score += 100;
         }
     }
     pthread_mutex_unlock(&mutex);
@@ -606,9 +622,13 @@ int update(GameState *game_state) {
 
     if (can_update_virtual_grid(game_state) &&
         detect_collision_bottom(game_state)) {
-        merge_tetromino_with_grid(game_state);
-        clear_full_rows(game_state);
-        pick_tetromino(game_state);
+        if (is_game_over(game_state)) {
+            game_state->is_game_over = 1;
+        } else {
+            merge_tetromino_with_grid(game_state);
+            clear_full_rows(game_state);
+            pick_tetromino(game_state);
+        }
     } else if (can_update_gravity(game_state)) {
         game_state->last_gravity_update_time = game_state->current_time;
         shift_points_down(game_state);
@@ -636,8 +656,18 @@ char *get_spaces(int n) {
 
 // Renders the virtual grid.
 int view(GameState *game_state) {
-    if (game_state->last_view_update_time == 0 ||
-        game_state->current_time - game_state->last_view_update_time >= MS_50) {
+    if (game_state->is_game_over) {
+        // get spaces to center the view
+        char *spaces = get_spaces(game_state->window_center_x);
+        // clear the screen
+        printf(CLEAR_SCREEN_AND_HIDE_CURSOR);
+        printf("%sGame Over", spaces);
+        for (int s = 0; s < game_state->window_center_y; s++) {
+            printf("\n");
+        }
+    } else if (game_state->last_view_update_time == 0 ||
+               game_state->current_time - game_state->last_view_update_time >=
+                   MS_50) {
         // update the view update time
         game_state->last_view_update_time = game_state->current_time;
 
@@ -645,7 +675,7 @@ int view(GameState *game_state) {
         char *spaces = get_spaces(game_state->window_center_x);
 
         // clear the screen
-        // printf(CLEAR_SCREEN_AND_HIDE_CURSOR);
+        printf(CLEAR_SCREEN_AND_HIDE_CURSOR);
 
         // print game title and score
         printf("%sTetris! Score: %7d\n", spaces, game_state->score);
@@ -692,11 +722,6 @@ int view(GameState *game_state) {
     return 0;
 }
 
-void handle_sigint(int sig) {
-    printf("Caught signal %d (SIGINT).", sig);
-    stop_reading = 1;
-}
-
 void debug_points(Point points[TETROMINO_BLOCK_SIZE]) {
     for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
         printf("(%d, %d), ", points[i].y, points[i].x);
@@ -717,9 +742,6 @@ int main() {
     // thread to read from stdin without blocking the main loop.
     pthread_t thread_id;
 
-    // properly handle ctrl+c
-    signal(SIGINT, handle_sigint);
-
     // create a new game state
     GameState game_state;
     init(&game_state);
@@ -736,16 +758,14 @@ int main() {
         return 1;
     }
 
-    while (!stop_reading) {
+    while (!game_state.is_game_over) {
         game_state.current_time = get_current_time();
         update(&game_state);
         view(&game_state);
     }
 
-    printf("Please press any key to finish quitting the game.\n");
-
+    pthread_cancel(thread_id);
     pthread_join(thread_id, NULL);
-
     pthread_mutex_destroy(&mutex);
 
     clean_up(&game_state);
