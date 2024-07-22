@@ -167,14 +167,26 @@ Point find_pivot_point(Point *points) {
 // Rotate the currently manipulated tetromino in the grid clockwise.
 void rotate_tetromino_in_grid(Point *points) {
     Point pivot = points[2];
-    int x, y, rotated_x, rotated_y;
+    int x, y, rotated_x, rotated_y, invalid = 0;
+    Point tmp_points[TETROMINO_BLOCK_SIZE];
     for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
         x = points[i].x - pivot.x;
         y = points[i].y - pivot.y;
-        rotated_x = y;
-        rotated_y = -x;
-        points[i].x = rotated_x + pivot.x;
-        points[i].y = rotated_y + pivot.y;
+        rotated_x = y + pivot.x;
+        rotated_y = -x + pivot.y;
+        if (rotated_x < 0 || rotated_x >= WIDTH || rotated_y < 0 ||
+            rotated_y >= HEIGHT) {
+            invalid = 1;
+            break;
+        }
+        tmp_points[i].x = rotated_x;
+        tmp_points[i].y = rotated_y;
+    }
+    if (!invalid) {
+        for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
+            points[i].x = tmp_points[i].x;
+            points[i].y = tmp_points[i].y;
+        }
     }
 }
 
