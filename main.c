@@ -27,6 +27,17 @@
 // containing those points.
 #define TETROMINO_BLOCK_SIZE 4
 
+// This represents the different tetromino available.
+enum Tetromino {
+    I,
+    O,
+    T,
+    S,
+    Z,
+    J,
+    L,
+};
+
 // Represents an individual point/block that makes up a tetromino.
 typedef struct {
     int x, y;
@@ -44,6 +55,8 @@ typedef struct {
 
     // Current tetromino being manipulated
     Point *points;
+    // The current shape type, help in rotating the tetromino.
+    enum Tetromino current_shape;
 
     // Window stat, the center point on the Y-axis.
     int window_center_y;
@@ -75,19 +88,10 @@ void shift_points_down(GameState *game_state);
 void shift_points_left(GameState *game_state);
 void shift_points_right(GameState *game_state);
 
-// This represents the different tetromino available.
-enum Tetromino {
-    I,
-    O,
-    T,
-    S,
-    Z,
-    J,
-    L,
-};
-
 volatile sig_atomic_t stop_reading = 0;
 struct termios original_tio;
+
+char shape_names[7] = {'I', 'O', 'T', 'S', 'Z', 'J', 'L'};
 
 // Function to restore the terminal to its original settings
 void restore_terminal_settings() {
@@ -146,6 +150,34 @@ void take_virtual_grid_snapshot(GameState *game_state) {
     }
 }
 
+// Gets the average of the x, y coordinates to get the centroid to use as a
+// pivot.
+Point find_pivot_point(Point *points) {
+    int min_x = points[0].x, min_y = points[0].y;
+    for (int i = 1; i < TETROMINO_BLOCK_SIZE; i++) {
+        if (points[i].x < min_x && points[i].y < min_y) {
+            min_x = points[i].x;
+            min_y = points[i].y;
+        }
+    }
+    Point pivot = {min_x, min_y};
+    return pivot;
+}
+
+// Rotate the currently manipulated tetromino in the grid clockwise.
+void rotate_tetromino_in_grid(Point *points) {
+    Point pivot = points[2];
+    int x, y, rotated_x, rotated_y;
+    for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
+        x = points[i].x - pivot.x;
+        y = points[i].y - pivot.y;
+        rotated_x = y;
+        rotated_y = -x;
+        points[i].x = rotated_x + pivot.x;
+        points[i].y = rotated_y + pivot.y;
+    }
+}
+
 // Clears the tetromino described by the points on the grid.
 void clear_tetromino_in_grid(int **grid, Point *points) {
     int x, y;
@@ -188,6 +220,9 @@ void *read_from_stdin(void *arg) {
                         break;
                     case 'k':
                         shift_points_right(game_state);
+                        break;
+                    case ' ':
+                        rotate_tetromino_in_grid(game_state->points);
                         break;
                     default:
                         break;
@@ -262,13 +297,13 @@ void pick_tetromino(GameState *game_state) {
         game_state->points[1].y = 0;
         game_state->points[1].x = WIDTH / 2 + 2;
 
-        // lower left point
-        game_state->points[2].y = 1;
-        game_state->points[2].x = WIDTH / 2;
-
         // lower middle point
+        game_state->points[2].y = 1;
+        game_state->points[2].x = WIDTH / 2 + 1;
+
+        // lower left point
         game_state->points[3].y = 1;
-        game_state->points[3].x = WIDTH / 2 + 1;
+        game_state->points[3].x = WIDTH / 2;
         break;
     case Z:
         // Shape
@@ -331,6 +366,7 @@ void pick_tetromino(GameState *game_state) {
         game_state->points[3].x = WIDTH / 2 + 2;
         break;
     }
+    game_state->current_shape = t;
 }
 
 // Initialize the game, includes playfield and picks the starting tetromino.
@@ -545,6 +581,7 @@ int view(GameState *game_state) {
         for (int s = 0; s < real_rendered_width; s++) {
             printf("-");
         }
+        printf("%sShape: %c", spaces, shape_names[game_state->current_shape]);
         printf("\n");
 
         for (int s = 0; s < game_state->window_center_y - 1; s++) {
