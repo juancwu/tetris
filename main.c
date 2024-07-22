@@ -583,8 +583,8 @@ int view(GameState *game_state) {
         for (int s = 0; s < real_rendered_width; s++) {
             printf("-");
         }
-        printf("%sShape: %c", spaces, shape_names[game_state->current_shape]);
         printf("\n");
+        printf("%sShape: %c", spaces, shape_names[game_state->current_shape]);
 
         for (int s = 0; s < game_state->window_center_y - 1; s++) {
             printf("\n");
