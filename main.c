@@ -164,30 +164,64 @@ Point find_pivot_point(Point *points) {
     return pivot;
 }
 
+// Correct any point(s) that are out of bounds after rotation. Each opposite
+// side are exclusive to each other.
+void correct_points_after_rotation(Point *points) {
+    int min_x = 0, min_y = 0, max_x = WIDTH - 1, max_y = HEIGHT - 1,
+        shift_x = 0, shift_y = 0;
+
+    // each opposite side its actually mutually exclusive so they won't
+    // interfere with the final shift amount.
+    for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
+        // left side
+        if (points[i].x < min_x)
+            min_x = points[i].x;
+        // right side
+        if (points[i].x > max_x)
+            max_x = points[i].x;
+
+        // top side
+        if (points[i].y < min_y)
+            min_y = points[i].y;
+        // bottom side
+        if (points[i].y > max_y)
+            max_y = points[i].y;
+    }
+
+    if (min_x < 0)
+        // shift right, change sign, negative to positive with double negative
+        shift_x = -min_x;
+    if (min_y < 0)
+        // shift down, change sign, negative to positive with double negative
+        shift_y = -min_y;
+    if (max_x >= WIDTH)
+        // shift left
+        shift_x = WIDTH - 1 - max_x;
+    if (max_y >= HEIGHT)
+        // shift up
+        shift_y = HEIGHT - 1 - max_y;
+
+    for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
+        points[i].x += shift_x;
+        points[i].y += shift_y;
+    }
+}
+
 // Rotate the currently manipulated tetromino in the grid clockwise.
 void rotate_tetromino_in_grid(Point *points) {
     Point pivot = points[2];
-    int x, y, rotated_x, rotated_y, invalid = 0;
-    Point tmp_points[TETROMINO_BLOCK_SIZE];
+    int x, y, rotated_x, rotated_y;
     for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
         x = points[i].x - pivot.x;
         y = points[i].y - pivot.y;
         rotated_x = y + pivot.x;
         rotated_y = -x + pivot.y;
-        if (rotated_x < 0 || rotated_x >= WIDTH || rotated_y < 0 ||
-            rotated_y >= HEIGHT) {
-            invalid = 1;
-            break;
-        }
-        tmp_points[i].x = rotated_x;
-        tmp_points[i].y = rotated_y;
+        points[i].x = rotated_x;
+        points[i].y = rotated_y;
     }
-    if (!invalid) {
-        for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
-            points[i].x = tmp_points[i].x;
-            points[i].y = tmp_points[i].y;
-        }
-    }
+
+    // correct the points if out of bounce
+    correct_points_after_rotation(points);
 }
 
 // Clears the tetromino described by the points on the grid.
