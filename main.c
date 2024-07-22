@@ -203,30 +203,31 @@ void place_tetromino_in_grid(int **grid, Point *points) {
 }
 
 // Send the current tetromino immmediately down.
-// void instant_fall(GameState *game_state) {
-//     Point lowest_point = {0, 0};
-//     int max_y = 0, shift_y = 0;
-//     // find the lowest point of the tetromino
-//     for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
-//         if (game_state->points[i].y > lowest_point.y)
-//             lowest_point = game_state->points[i];
-//     }
-//     // find the shift amount from lowest point to bottom
-//     for (int y = lowest_point.y; y < HEIGHT; y++) {
-//         if (game_state->virtual_grid[y][lowest_point.x] == 0) {
-//             shift_y += 1;
-//         } else {
-//             break;
-//         }
-//     }
-//     // shift the tetromino points
-//     for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
-//         game_state->points[i].y += shift_y;
-//         if (game_state->points[i].y >= HEIGHT) {
-//             game_state->points[i].y = HEIGHT - 1;
-//         }
-//     }
-// }
+void instant_fall(GameState *game_state) {
+    Point lowest_point = {0, 0};
+    int max_y = 0, shift_y = 0;
+    pthread_mutex_lock(&mutex);
+    // find the lowest point of the tetromino
+    for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
+        if (game_state->points[i].y > lowest_point.y) {
+            lowest_point.x = game_state->points[i].x;
+            lowest_point.y = game_state->points[i].y;
+        }
+    }
+    // find the shift amount from lowest point to bottom
+    for (int y = lowest_point.y + 1; y < HEIGHT; y++) {
+        if (game_state->virtual_grid[y][lowest_point.x] == 0) {
+            shift_y += 1;
+        } else {
+            break;
+        }
+    }
+    // shift the tetromino points
+    for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
+        game_state->points[i].y += shift_y;
+    }
+    pthread_mutex_unlock(&mutex);
+}
 
 // This is a thread function that is responsible of handling reading inputs from
 // stdin.
@@ -261,9 +262,9 @@ void *read_from_stdin(void *arg) {
                         }
                         break;
                     case '\n':
-                        // if (!detect_collision_bottom(game_state)) {
-                        //     instant_fall(game_state);
-                        // }
+                        if (!detect_collision_bottom(game_state)) {
+                            instant_fall(game_state);
+                        }
                         break;
                     default:
                         break;
