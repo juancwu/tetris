@@ -21,8 +21,8 @@
 #define MS_100 100000
 // Delay in microseconds (150 ms)
 #define MS_150 150000
-// Delay in microseconds (300 ms)
-#define MS_300 300000
+// Delay in microseconds (500 ms)
+#define MS_500 500000
 // Each tetromino can be represented by 4 points. This is the size of the array
 // containing those points.
 #define TETROMINO_BLOCK_SIZE 4
@@ -476,7 +476,7 @@ int can_update_virtual_grid(GameState *game_state) {
 int can_update_gravity(GameState *game_state) {
     return game_state->last_gravity_update_time == 0 ||
            game_state->current_time - game_state->last_gravity_update_time >=
-               MS_300;
+               MS_500;
 }
 
 // Collision detection on the bottom of the current points.
@@ -566,27 +566,33 @@ void merge_tetromino_with_grid(GameState *game_state) {
 }
 
 // Erases the completed rows from bottom up.
-void erase_complete_rows(GameState *game_state) {
-    int remove_row;
+void clear_full_rows(GameState *game_state) {
+    int is_full_row;
     pthread_mutex_lock(&mutex);
-    for (int y = HEIGHT - 1; y > -1; y--) {
-        remove_row = 1;
+    for (int y = 0; y < HEIGHT; y++) {
+        // assume it is full row
+        is_full_row = 1;
+        // verify if it is full row
         for (int x = 0; x < WIDTH; x++) {
             if (game_state->virtual_grid[y][x] == 0) {
-                remove_row = 0;
+                is_full_row = 0;
                 break;
             }
         }
-        if (remove_row) {
-            for (int x = 0; x < WIDTH; x++) {
-                game_state->virtual_grid[y][x] = 0;
-            }
-            for (int y2 = y - 1; y2 > HEIGHT - 1; y2--) {
-                for (int x2 = 0; x2 < WIDTH; x2++) {
-                    game_state->virtual_grid[y2 + 1][x2] =
-                        game_state->virtual_grid[y2][x2];
+        if (is_full_row) {
+            // clear full row and shift upper rows down
+            for (int yy = y; yy > 0; yy--) {
+                for (int xx = 0; xx < WIDTH; xx++) {
+                    game_state->virtual_grid[yy][xx] =
+                        game_state->virtual_grid[yy - 1][xx];
                 }
             }
+            // clear top row
+            for (int xx = 0; xx < WIDTH; xx++) {
+                game_state->virtual_grid[0][xx] = 0;
+            }
+            // move back one row because all rows have been shifted down
+            y--;
         }
     }
     pthread_mutex_unlock(&mutex);
@@ -598,21 +604,21 @@ int update(GameState *game_state) {
         clear_tetromino_in_grid(game_state->virtual_grid, game_state->points);
     }
 
-    if (can_update_gravity(game_state)) {
+    if (can_update_virtual_grid(game_state) &&
+        detect_collision_bottom(game_state)) {
+        merge_tetromino_with_grid(game_state);
+        clear_full_rows(game_state);
+        pick_tetromino(game_state);
+    } else if (can_update_gravity(game_state)) {
         game_state->last_gravity_update_time = game_state->current_time;
-        if (detect_collision_bottom(game_state)) {
-            merge_tetromino_with_grid(game_state);
-            erase_complete_rows(game_state);
-            pick_tetromino(game_state);
-        } else {
-            shift_points_down(game_state);
-        }
+        shift_points_down(game_state);
     }
 
     if (can_update_virtual_grid(game_state)) {
         game_state->last_virtual_grid_update_time = game_state->current_time;
         place_tetromino_in_grid(game_state->virtual_grid, game_state->points);
     }
+
     return 0;
 }
 
