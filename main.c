@@ -246,7 +246,7 @@ void pick_tetromino(GameState *game_state) {
         // [][][][]
         for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
             game_state->points[i].y = 0;
-            game_state->points[i].x = WIDTH / 2 + i;
+            game_state->points[i].x = WIDTH / 2 + i - 2;
         }
         break;
     case T:
@@ -255,35 +255,35 @@ void pick_tetromino(GameState *game_state) {
         // [][][]
         // top middle point
         game_state->points[0].y = 0;
-        game_state->points[0].x = WIDTH / 2 + 1;
+        game_state->points[0].x = WIDTH / 2 - 1;
 
         // lower left point
         game_state->points[1].y = 1;
-        game_state->points[1].x = WIDTH / 2;
+        game_state->points[1].x = WIDTH / 2 - 2;
 
         // lower middle point
         game_state->points[2].y = 1;
-        game_state->points[2].x = WIDTH / 2 + 1;
+        game_state->points[2].x = WIDTH / 2 - 1;
 
         // lower right point
         game_state->points[3].y = 1;
-        game_state->points[3].x = WIDTH / 2 + 2;
+        game_state->points[3].x = WIDTH / 2;
         break;
     case O:
         // Shape
         // [][]
         // [][]
         game_state->points[0].y = 0;
-        game_state->points[0].x = 0;
+        game_state->points[0].x = WIDTH / 2 - 1;
 
         game_state->points[1].y = 0;
-        game_state->points[1].x = 1;
+        game_state->points[1].x = WIDTH / 2;
 
         game_state->points[2].y = 1;
-        game_state->points[2].x = 0;
+        game_state->points[2].x = WIDTH / 2 - 1;
 
         game_state->points[3].y = 1;
-        game_state->points[3].x = 1;
+        game_state->points[3].x = WIDTH / 2;
         break;
     case S:
         // Shape
@@ -291,19 +291,19 @@ void pick_tetromino(GameState *game_state) {
         // [][]
         // top middle point
         game_state->points[0].y = 0;
-        game_state->points[0].x = WIDTH / 2 + 1;
+        game_state->points[0].x = WIDTH / 2 - 1;
 
         // top right point
         game_state->points[1].y = 0;
-        game_state->points[1].x = WIDTH / 2 + 2;
+        game_state->points[1].x = WIDTH / 2;
 
         // lower middle point
         game_state->points[2].y = 1;
-        game_state->points[2].x = WIDTH / 2 + 1;
+        game_state->points[2].x = WIDTH / 2 - 1;
 
         // lower left point
         game_state->points[3].y = 1;
-        game_state->points[3].x = WIDTH / 2;
+        game_state->points[3].x = WIDTH / 2 - 2;
         break;
     case Z:
         // Shape
@@ -311,19 +311,19 @@ void pick_tetromino(GameState *game_state) {
         //   [][]
         // top left point
         game_state->points[0].y = 0;
-        game_state->points[0].x = WIDTH / 2;
+        game_state->points[0].x = WIDTH / 2 - 1;
 
         // top middle point
         game_state->points[1].y = 0;
-        game_state->points[1].x = WIDTH / 2 + 1;
+        game_state->points[1].x = WIDTH / 2;
 
         // lower middle point
         game_state->points[2].y = 1;
-        game_state->points[2].x = WIDTH / 2 + 1;
+        game_state->points[2].x = WIDTH / 2;
 
         // lower right point
         game_state->points[3].y = 1;
-        game_state->points[3].x = WIDTH / 2 + 2;
+        game_state->points[3].x = WIDTH / 2 + 1;
         break;
     case L:
         // Shape
@@ -331,19 +331,19 @@ void pick_tetromino(GameState *game_state) {
         // [][][]
         // top right point
         game_state->points[0].y = 0;
-        game_state->points[0].x = WIDTH / 2 + 2;
+        game_state->points[0].x = WIDTH / 2;
 
         // lower left point
         game_state->points[1].y = 1;
-        game_state->points[1].x = WIDTH / 2;
+        game_state->points[1].x = WIDTH / 2 - 2;
 
         // lower middle point
         game_state->points[2].y = 1;
-        game_state->points[2].x = WIDTH / 2 + 1;
+        game_state->points[2].x = WIDTH / 2 - 1;
 
         // lower right point
         game_state->points[3].y = 1;
-        game_state->points[3].x = WIDTH / 2 + 2;
+        game_state->points[3].x = WIDTH / 2;
         break;
     case J:
         // Shape
@@ -351,19 +351,19 @@ void pick_tetromino(GameState *game_state) {
         // [][][]
         // top left point
         game_state->points[0].y = 0;
-        game_state->points[0].x = WIDTH / 2;
+        game_state->points[0].x = WIDTH / 2 - 2;
 
         // lower left point
         game_state->points[1].y = 1;
-        game_state->points[1].x = WIDTH / 2;
+        game_state->points[1].x = WIDTH / 2 - 2;
 
         // lower middle point
         game_state->points[2].y = 1;
-        game_state->points[2].x = WIDTH / 2 + 1;
+        game_state->points[2].x = WIDTH / 2 - 1;
 
         // lower right point
         game_state->points[3].y = 1;
-        game_state->points[3].x = WIDTH / 2 + 2;
+        game_state->points[3].x = WIDTH / 2;
         break;
     }
     game_state->current_shape = t;
