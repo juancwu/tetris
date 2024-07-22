@@ -21,8 +21,8 @@
 #define MS_100 100000
 // Delay in microseconds (150 ms)
 #define MS_150 150000
-// Delay in microseconds (600 ms)
-#define MS_600 600000
+// Delay in microseconds (300 ms)
+#define MS_300 300000
 // Each tetromino can be represented by 4 points. This is the size of the array
 // containing those points.
 #define TETROMINO_BLOCK_SIZE 4
@@ -49,9 +49,6 @@ typedef struct {
     // This makes it easier to do collision detection, rotation and movement.
     // Then when everything has been checked, the grid can be printed.
     int **virtual_grid;
-    // A snapshot of the virtual grid. This is used for comparison before
-    // updating the virtual grid.
-    int snap_virtual_grid[HEIGHT][WIDTH];
 
     // Current tetromino being manipulated
     Point *points;
@@ -87,11 +84,12 @@ int detect_collision_right(GameState *game_state);
 void shift_points_down(GameState *game_state);
 void shift_points_left(GameState *game_state);
 void shift_points_right(GameState *game_state);
+void check_complete_rows(GameState *game_state);
 
 volatile sig_atomic_t stop_reading = 0;
 struct termios original_tio;
-
 char shape_names[7] = {'I', 'O', 'T', 'S', 'Z', 'J', 'L'};
+pthread_mutex_t mutex;
 
 // Function to restore the terminal to its original settings
 void restore_terminal_settings() {
@@ -117,37 +115,6 @@ long get_current_time() {
     struct timeval current_time;
     gettimeofday(&current_time, NULL);
     return (current_time.tv_sec * ONE_SECOND_IN_MS + current_time.tv_usec);
-}
-
-// Checks if grid A is equal to grid B.
-int equal_virtual_grid(int A[HEIGHT][WIDTH], int B[HEIGHT][WIDTH]) {
-    for (int y = 0; y < HEIGHT; y++) {
-        for (int x = 0; x < WIDTH; x++) {
-            if (A[y][x] != B[y][x]) {
-                return 0;
-            }
-        }
-    }
-    return 1;
-}
-
-// Copies the grid from src to dst.
-void copy_grid(int src[HEIGHT][WIDTH], int dst[HEIGHT][WIDTH]) {
-    for (int y = 0; y < HEIGHT; y++) {
-        for (int x = 0; x < WIDTH; x++) {
-            dst[y][x] = src[y][x];
-        }
-    }
-}
-
-// Takes a snapshot of the virtual grid
-void take_virtual_grid_snapshot(GameState *game_state) {
-    for (int y = 0; y < HEIGHT; y++) {
-        for (int x = 0; x < WIDTH; x++) {
-            game_state->snap_virtual_grid[y][x] =
-                game_state->virtual_grid[y][x];
-        }
-    }
 }
 
 // Correct any point(s) that are out of bounds after rotation. Each opposite
@@ -197,6 +164,7 @@ void correct_points_after_rotation(Point *points) {
 void rotate_tetromino_in_grid(Point *points) {
     Point pivot = points[2];
     int x, y, rotated_x, rotated_y;
+    pthread_mutex_lock(&mutex);
     for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
         x = points[i].x - pivot.x;
         y = points[i].y - pivot.y;
@@ -208,24 +176,29 @@ void rotate_tetromino_in_grid(Point *points) {
 
     // correct the points if out of bounce
     correct_points_after_rotation(points);
+    pthread_mutex_unlock(&mutex);
 }
 
 // Clears the tetromino described by the points on the grid.
 void clear_tetromino_in_grid(int **grid, Point *points) {
     int x, y;
+    pthread_mutex_lock(&mutex);
     for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
         x = points[i].x, y = points[i].y;
         grid[y][x] = 0;
     }
+    pthread_mutex_unlock(&mutex);
 }
 
 // Places the tetromino described by the points on the grid.
 void place_tetromino_in_grid(int **grid, Point *points) {
     int x, y;
+    pthread_mutex_lock(&mutex);
     for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
         x = points[i].x, y = points[i].y;
         grid[y][x] = 1;
     }
+    pthread_mutex_unlock(&mutex);
 }
 
 // Send the current tetromino immmediately down.
@@ -307,6 +280,7 @@ void *read_from_stdin(void *arg) {
 // tetromino in the game state.
 void pick_tetromino(GameState *game_state) {
     enum Tetromino t = rand() % 7;
+    pthread_mutex_lock(&mutex);
     switch (t) {
     case I:
         // Shape
@@ -433,6 +407,7 @@ void pick_tetromino(GameState *game_state) {
         game_state->points[3].x = WIDTH / 2;
         break;
     }
+    pthread_mutex_unlock(&mutex);
     game_state->current_shape = t;
 }
 
@@ -470,7 +445,6 @@ void init(GameState *game_state) {
         }
     }
     place_tetromino_in_grid(game_state->virtual_grid, game_state->points);
-    take_virtual_grid_snapshot(game_state);
 
     game_state->last_view_update_time = 0;
     game_state->last_gravity_update_time = 0;
@@ -502,7 +476,7 @@ int can_update_virtual_grid(GameState *game_state) {
 int can_update_gravity(GameState *game_state) {
     return game_state->last_gravity_update_time == 0 ||
            game_state->current_time - game_state->last_gravity_update_time >=
-               MS_600;
+               MS_300;
 }
 
 // Collision detection on the bottom of the current points.
@@ -547,9 +521,11 @@ void shift_points_down(GameState *game_state) {
     if (detect_collision_bottom(game_state)) {
         return;
     }
+    pthread_mutex_lock(&mutex);
     for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
         game_state->points[i].y++;
     }
+    pthread_mutex_unlock(&mutex);
 }
 
 // Shifts the current points 1 unit left if possible, otherwise it will stay the
@@ -558,9 +534,11 @@ void shift_points_left(GameState *game_state) {
     if (detect_collision_left(game_state)) {
         return;
     }
+    pthread_mutex_lock(&mutex);
     for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
         game_state->points[i].x--;
     }
+    pthread_mutex_unlock(&mutex);
 }
 
 // Shifts the current points 1 unit right if possible, otherwise it will stay
@@ -569,18 +547,49 @@ void shift_points_right(GameState *game_state) {
     if (detect_collision_right(game_state)) {
         return;
     }
+    pthread_mutex_lock(&mutex);
     for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
         game_state->points[i].x++;
     }
+    pthread_mutex_unlock(&mutex);
 }
 
 // Merges the current manipulated tetromino into the grid.
 void merge_tetromino_with_grid(GameState *game_state) {
+    pthread_mutex_lock(&mutex);
     for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
         game_state
             ->virtual_grid[game_state->points[i].y][game_state->points[i].x] =
             1;
     }
+    pthread_mutex_unlock(&mutex);
+}
+
+// Erases the completed rows from bottom up.
+void erase_complete_rows(GameState *game_state) {
+    int remove_row;
+    pthread_mutex_lock(&mutex);
+    for (int y = HEIGHT - 1; y > -1; y--) {
+        remove_row = 1;
+        for (int x = 0; x < WIDTH; x++) {
+            if (game_state->virtual_grid[y][x] == 0) {
+                remove_row = 0;
+                break;
+            }
+        }
+        if (remove_row) {
+            for (int x = 0; x < WIDTH; x++) {
+                game_state->virtual_grid[y][x] = 0;
+            }
+            for (int y2 = y - 1; y2 > HEIGHT - 1; y2--) {
+                for (int x2 = 0; x2 < WIDTH; x2++) {
+                    game_state->virtual_grid[y2 + 1][x2] =
+                        game_state->virtual_grid[y2][x2];
+                }
+            }
+        }
+    }
+    pthread_mutex_unlock(&mutex);
 }
 
 // Update the virtual grid according to various states.
@@ -591,10 +600,12 @@ int update(GameState *game_state) {
 
     if (can_update_gravity(game_state)) {
         game_state->last_gravity_update_time = game_state->current_time;
-        shift_points_down(game_state);
         if (detect_collision_bottom(game_state)) {
             merge_tetromino_with_grid(game_state);
+            erase_complete_rows(game_state);
             pick_tetromino(game_state);
+        } else {
+            shift_points_down(game_state);
         }
     }
 
@@ -707,6 +718,12 @@ int main() {
     GameState game_state;
     init(&game_state);
 
+    if (pthread_mutex_init(&mutex, NULL) != 0) {
+        perror("pthread_mutex_init");
+        clean_up(&game_state);
+        return 1;
+    }
+
     if (pthread_create(&thread_id, NULL, read_from_stdin, &game_state) != 0) {
         perror("pthread_create");
         clean_up(&game_state);
@@ -722,6 +739,8 @@ int main() {
     printf("Please press any key to finish quitting the game.\n");
 
     pthread_join(thread_id, NULL);
+
+    pthread_mutex_destroy(&mutex);
 
     clean_up(&game_state);
 
