@@ -254,7 +254,11 @@ void *read_from_stdin(void *arg) {
                         shift_points_right(game_state);
                         break;
                     case ' ':
-                        rotate_tetromino_in_grid(game_state->points);
+                        // do not rotate a tetromino that doesn't change after
+                        // rotation.
+                        if (game_state->current_shape != O) {
+                            rotate_tetromino_in_grid(game_state->points);
+                        }
                         break;
                     default:
                         break;
