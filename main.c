@@ -408,6 +408,8 @@ void init(GameState *game_state) {
     game_state->last_view_update_time = 0;
     game_state->last_gravity_update_time = 0;
     game_state->last_virtual_grid_update_time = 0;
+
+    game_state->score = 0;
 }
 
 // cleans up after the game
