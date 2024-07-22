@@ -543,6 +543,15 @@ void shift_points_right(GameState *game_state) {
     }
 }
 
+// Merges the current manipulated tetromino into the grid.
+void merge_tetromino_with_grid(GameState *game_state) {
+    for (int i = 0; i < TETROMINO_BLOCK_SIZE; i++) {
+        game_state
+            ->virtual_grid[game_state->points[i].y][game_state->points[i].x] =
+            1;
+    }
+}
+
 // Update the virtual grid according to various states.
 int update(GameState *game_state) {
     if (can_update_virtual_grid(game_state)) {
@@ -553,6 +562,7 @@ int update(GameState *game_state) {
         game_state->last_gravity_update_time = game_state->current_time;
         shift_points_down(game_state);
         if (detect_collision_bottom(game_state)) {
+            merge_tetromino_with_grid(game_state);
             pick_tetromino(game_state);
         }
     }
