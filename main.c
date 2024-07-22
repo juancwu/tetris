@@ -150,20 +150,6 @@ void take_virtual_grid_snapshot(GameState *game_state) {
     }
 }
 
-// Gets the average of the x, y coordinates to get the centroid to use as a
-// pivot.
-Point find_pivot_point(Point *points) {
-    int min_x = points[0].x, min_y = points[0].y;
-    for (int i = 1; i < TETROMINO_BLOCK_SIZE; i++) {
-        if (points[i].x < min_x && points[i].y < min_y) {
-            min_x = points[i].x;
-            min_y = points[i].y;
-        }
-    }
-    Point pivot = {min_x, min_y};
-    return pivot;
-}
-
 // Correct any point(s) that are out of bounds after rotation. Each opposite
 // side are exclusive to each other.
 void correct_points_after_rotation(Point *points) {
