@@ -251,7 +251,7 @@ void *read_from_stdin(void *arg) {
 // Randomly picks a tetromino and sets the default starting points of a
 // tetromino in the game state.
 void pick_tetromino(GameState *game_state) {
-    enum Tetromino t = rand() % 8;
+    enum Tetromino t = rand() % 7;
     switch (t) {
     case I:
         // Shape
